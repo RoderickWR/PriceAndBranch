@@ -25,20 +25,20 @@ class Master:
     
     def __init__(self,initPatterns,initProcessingTimes,n,m):      
         self.lamb  = {}
-        self.alphaCons = {}
-        self.betaCons = {}
-        self.gammaCons = {}
-        self.omegaCons = {}
-        self.s = {}
-        self.f = {}
-        self.c_max = {}
-        self.x = {}
-        self.patterns = initPatterns
-        self.processing_times = initProcessingTimes
+        self.alphaCons = {} #convexity constraints: Each machine must select a convex combination of all patterns
+        self.betaCons = {} #start time constraint: The start time of jobs on machines is determined by the selected pattern for a machine
+        self.gammaCons = {} #completion time constraint: The start time of jobs on machines is determined by the selected pattern for a machine
+        self.omegaCons = {} #order constraint: The order of jobs on machines is enforced by this constraint
+        self.s = {} #dict storing the starting time variables of jobs on machines
+        self.f = {} #dict storing the completion time variables of jobs on machines
+        self.c_max = {} #dict storing the makespan variable of the flow shop
+        self.x = {} #dict storing the order variables
+        self.patterns = initPatterns #initial patterns for the master
+        self.processing_times = initProcessingTimes #processing times of the flow shop (n,m)
         
-        self.bigM = 100
+        self.bigM = 100 #bigM parameter used in the order constraint
         self.model = None
-        self.createMaster(n,m)
+        self.createMaster(n,m) #creates a gurobi model and stores it in self.model
         
         
     def createMaster(self,n,m):
@@ -87,13 +87,9 @@ class Master:
                 for j in range(0,n):
                     self.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(k,j,i)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-self.x[k,j,i])) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
         
-        
              
         self.model.update()
-        
-        # We need to store the created constraints to be able to columns to them later on.
-        # Define master
-        
+
 
         for i in range(0,m):
             for j in range(0,n):
@@ -121,7 +117,7 @@ class Master:
           
     def updateMaster(self):
         
-        #clear the global cons then rewrite them given the new dict of patterns and lambdas 
+        #clear the current constraints and define them again given the new and reduct dict of patterns and lambdas 
         self.model.remove(self.model.getConstrs())
         self.alphaCons = {}
         self.betaCons = {}
@@ -234,6 +230,7 @@ class Pricing:
 
         
 class Optimizer:
+    #contains both the master and pricing, then performs the pattern generation
     
     def __init__(self,initPatterns,initProcessingTimes,n,m): 
         self.numberJobs = n
@@ -244,7 +241,7 @@ class Optimizer:
         self.processing_times = initProcessingTimes
         self.patterns = initPatterns
         
-        self.pricingList = self.createPricingList()
+        self.pricingList = self.createPricingList() #a list of m pricing problems
         
         self.master = Master(initPatterns,initProcessingTimes,n,m)
         
