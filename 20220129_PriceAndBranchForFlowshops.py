@@ -51,7 +51,7 @@ class Master:
         # Create lambda variables for these patterns.
         for (key, value) in self.patterns.items():
             for i in range(0,m):
-                self.lamb[key,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="lambda(%s,%s)"%(key,i)) #is pattern p used on machine i
+                self.lamb[key,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="lambda(%s,%s)"%(key,i), lb=0.0, ub=1.0) #is pattern p used on machine i
 
         # for p in range(len(patterns)):
         #     for i in range(0,m):
@@ -64,15 +64,15 @@ class Master:
          
         for i in range(0,m):
             for j in range(0,n):
-                self.s[i,j] = self.model.addVar(vtype=GRB.CONTINUOUS, name="start(%s,%s)"%(i,j))
-                self.f[i,j] = self.model.addVar(vtype=GRB.CONTINUOUS, name="finish(%s,%s)"%(i,j))
+                self.s[i,j] = self.model.addVar(vtype=GRB.CONTINUOUS, name="start(%s,%s)"%(i,j), lb=0.0, ub=100.0)
+                self.f[i,j] = self.model.addVar(vtype=GRB.CONTINUOUS, name="finish(%s,%s)"%(i,j), lb=0.0, ub=100.0)
         
         #Create order matrix
 
         for i in range(0,m):
             for j in range(0,n):
                 for k in range(0,n):
-                    self.x[j,k,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="x(%s,%s,%s)"%(j,k,i)) 
+                    self.x[j,k,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="x(%s,%s,%s)"%(j,k,i), lb=0.0, ub=1.0) 
         
         
         for i in range(0,m):   
@@ -177,7 +177,7 @@ class Pricing:
         self.x = {}
         self.processing_times = initProcessingTimes
         self.machineIndex = i
-        self.bigM = 26
+        self.bigM = 100
         self.pricing = None
         self.createPricing()
         
@@ -196,12 +196,8 @@ class Pricing:
                            
         
         for j in range(0,n):
-            self.s[j] = self.pricing.addVar(vtype=GRB.CONTINUOUS, name="start(%s)"%(j))
-            self.pricing.addConstr(self.s[j] <= 100)
-            self.pricing.addConstr(self.s[j] >= 0)
-            self.f[j] = self.pricing.addVar(vtype=GRB.CONTINUOUS, name="finish(%s)"%(j))
-            self.pricing.addConstr(self.f[j] <= 100)
-            self.pricing.addConstr(self.f[j] >= 0)
+            self.s[j] = self.pricing.addVar(vtype=GRB.CONTINUOUS, name="start(%s)"%(j), lb=0.0, ub=100.0)
+            self.f[j] = self.pricing.addVar(vtype=GRB.CONTINUOUS, name="finish(%s)"%(j), lb=0.0, ub=100.0)
             self.pricing.addConstr(self.s[j] + self.processing_times[j,self.machineIndex] <= self.f[j], "StartFinish(%s)"%(j)) 
          
             
@@ -299,16 +295,14 @@ class Optimizer:
     
 
     def cleanPatterns(self, threshold):  
-        #delete the entries in patterns and lamb, that violate threshold
+        #delete the entries in patterns and lamb in the master, that violate threshold 
         
         # create a new lamb dict with new keys using the old lamb dict 
-        self.master.lamb = {key: value for (index, (key, value)) in enumerate(self.master.lamb.items()) if not max(self.patterns[key[0]][1]) > threshold}  
-        
-        #checks whether the largest finish time of all jobs in a pattern p is bigger than threshold
-        self.patterns = {key: value for (key,value) in self.patterns.items() if not max(value[1]) > threshold}
+        self.master.lamb = {key: value for (index, (key, value)) in enumerate(self.master.lamb.items()) if not max(self.master.patterns[key[0]][1]) > threshold}  
         
         try:
-            self.master.patterns = self.patterns
+            #checks whether the largest finish time of all jobs in a pattern p is bigger than threshold
+            self.master.patterns = {key: value for (key,value) in self.master.patterns.items() if not max(value[1]) > threshold}
         except: 
             print("self.master.patterns cannot be updated.")
         
@@ -361,10 +355,10 @@ class Optimizer:
                       print("pricing.getVarByName(x(%s,%s)%(j,k)).obj: ", pricing.pricing.getVarByName("x(%s,%s)"%(j,k)).obj)
                     
                 
-              # #additional constraints for new patterns during loop
-              # for j in range(0,n):
-              #     pricing.addConstr(pricing.getVarByName("finish(%s)" %(j)) <= model.getVarByName("finish(%s,%s)" %(i,j)).x)    
-                  
+              #additional constraints for new patterns during loop
+              for j in range(0,n):
+                  pricing.pricing.addConstr(pricing.pricing.getVarByName("finish(%s)" %(j)) <= self.master.model.getVarByName("finish(%s,%s)" %(i,j)).x)    
+                 
                   
               # We solve the pricing problem.
               pricing.pricing.optimize()
@@ -373,7 +367,7 @@ class Optimizer:
               if pricing.pricing.status == GRB.OPTIMAL and  pricing.pricing.objVal - alpha["ConvexityOnMachine(%s)"%(i)] < 0:
                   # If the Knapsack solution is good enough, we add the column.
                 newPattern = self.retrieveXMatrix(pricing.pricing)
-                self.patterns[len(self.patterns)] = newPattern
+                self.master.patterns[len(self.master.patterns)] = newPattern
                 print("and ", newPattern, " is added")
                 print('Appended pattern: ', counter)
             
@@ -386,7 +380,7 @@ class Optimizer:
                         col.addTerms(newPattern[0][j], self.master.betaCons["Start(%s,%s)"%(i,j)])
                         col.addTerms(newPattern[1][j], self.master.gammaCons["Finish(%s,%s)"%(i,j)])
                     # We create the lambda variable with this column.
-                    self.master.lamb[len(self.patterns) - 1,i] = self.master.model.addVar(name="lambda(%s,%s))"%(len(self.patterns) - 1,i), column=col)
+                    self.master.lamb[len(self.master.patterns) - 1,i] = self.master.model.addVar(name="lambda(%s,%s))"%(len(self.master.patterns) - 1,i), column=col)
         
                 counter += 1
         
@@ -398,9 +392,9 @@ class Optimizer:
     
               # BRANCHING 1) restict second machine pricing problem, 2) delete patterns that violate this restiction, 3) delete the respective lambdas in master
               for j in range(0,n):
-                  self.pricingList["pricing(%s)"%(1)].pricing.addConstr(self.pricingList["pricing(%s)"%(1)].pricing.getVarByName("finish(%s)" %(j))<= 100 )
+                  self.pricingList["pricing(%s)"%(1)].pricing.addConstr(self.pricingList["pricing(%s)"%(1)].pricing.getVarByName("finish(%s)" %(j))<= 50 )
                
-              self.cleanPatterns(100)
+              self.cleanPatterns(50)
               self.master.updateMaster()
     
               break
@@ -437,12 +431,12 @@ processing_times = np.array([[7,1],[1,7]]) #job 1 takes 7 hours on machine 1, an
 
 # We start with only randomly generated patterns.
 # pattern 1 is[[0,7],[7,8]]. The structure is [[start time job 1, start time job 2,...],[compl time job 1, compl time job 2,...]]
-patterns = {0: [[0,7],[7,8]], 1: [[0,0],[16,60]], 2: [[14,16],[0,0]] }
+patterns = {0: [[0,7],[7,8]], 1: [[0,0],[16,60]], 2: [[14,16],[0,0]], 3:[[3,6],[4,13]]  }
 
 opt = Optimizer(patterns,processing_times, n, m)
 
 opt.loopMasterPricing()
-
+opt.loopMasterPricing()
 opt.solveIPCompact()
 
 
