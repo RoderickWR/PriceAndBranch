@@ -1,5 +1,12 @@
 # -*- coding: utf-8 -*-
 """
+Created on Wed Feb  2 14:26:55 2022
+
+@author: WallrathR
+"""
+
+# -*- coding: utf-8 -*-
+"""
 Created on Fri Jan 28 18:36:02 2022
 
 @author: WallrathR
@@ -45,7 +52,7 @@ class Master:
 
         ### 1) CREATE MASTER
         self.model = Model("Bin Packing Price and Branch")
-        self.model.params.outputflag = 0
+        # self.model.params.outputflag = 0
         self.model.modelSense = GRB.MINIMIZE
         
         # Create lambda variables for these patterns.
@@ -59,33 +66,36 @@ class Master:
         
        
         for i in range(0,m):  
-            self.alphaCons["ConvexityOnMachine(%s)"%(i)] = self.model.addConstr( quicksum( self.lamb[key,i] for (key,value) in self.patterns.items()) == 1, "ConvexityOnMachine(%s)"%(i)) # only one pattern per machine
+            self.alphaCons["convexityOnMachine(%s)"%(i)] = self.model.addConstr( quicksum( self.lamb[key,i] for (key,value) in self.patterns.items()) - 1 == 0, "convexityOnMachine(%s)"%(i)) # only one pattern per machine
           
          
         for i in range(0,m):
             for j in range(0,n):
                 self.s[i,j] = self.model.addVar(vtype=GRB.CONTINUOUS, name="start(%s,%s)"%(i,j), lb=0.0, ub=100.0)
                 self.f[i,j] = self.model.addVar(vtype=GRB.CONTINUOUS, name="finish(%s,%s)"%(i,j), lb=0.0, ub=100.0)
+                
+        #define makespan
+        self.c_max = self.model.addVar(vtype=GRB.CONTINUOUS, name="makespan", obj=1.0)
         
         #Create order matrix
 
-        for i in range(0,m):
-            for j in range(0,n):
-                for k in range(0,n):
-                    self.x[j,k,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="x(%s,%s,%s)"%(j,k,i), lb=0.0, ub=1.0) 
+        # for i in range(0,m):
+        #     for j in range(0,n):
+        #         for k in range(0,n):
+        #             self.x[j,k,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="x(%s,%s,%s)"%(j,k,i), lb=0.0, ub=1.0) 
         
         
-        for i in range(0,m):   
-            for j in range(0,n):
-                for k in range(0,n):
-                    if k != j: 
-                        self.model.addConstr(self.x[j,k,i] + self.x[k,j,i] == 1 , "Assign3(%s)"%(j))
+        # for i in range(0,m):   
+        #     for j in range(0,n):
+        #         for k in range(0,n):
+        #             if k != j: 
+        #                 self.model.addConstr(self.x[j,k,i] + self.x[k,j,i] == 1 , "Assign3(%s)"%(j))
         
-        for i in range(0,m):
+        # for i in range(0,m):
         
-            for k in range(0,n):
-                for j in range(0,n):
-                    self.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(k,j,i)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-self.x[k,j,i])) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+        #     for k in range(0,n):
+        #         for j in range(0,n):
+        #             self.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(k,j,i)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-self.x[k,j,i])) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
         
              
         self.model.update()
@@ -93,20 +103,19 @@ class Master:
 
         for i in range(0,m):
             for j in range(0,n):
-                self.betaCons["Start(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][0][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) == self.s[i,j]) #starting time on machine i for job j is determined by the starting time of job j in the selected pattern p
-                self.gammaCons["Finish(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][1][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) == self.f[i,j]) #completion time on machine i for job j is determined by the completion time of job j in the selected pattern p
+                self.betaCons["start(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][0][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) - self.s[i,j] == 0 ) #starting time on machine i for job j is determined by the starting time of job j in the selected pattern p
+                self.gammaCons["finish(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][1][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) - self.f[i,j] == 0) #completion time on machine i for job j is determined by the completion time of job j in the selected pattern p
             if i != m-1:
                 for j in range(0,n):
-                    self.model.addConstr(self.f[i,j] <= self.s[i+1,j], "InterMachine(%s,%s)"%(i,j))
+                    self.model.addConstr(self.f[i,j] <= self.s[i+1,j], "interMachine(%s,%s)"%(i,j))
             for j in range(0,n):   
                 self.model.addConstr(self.s[i,j] + self.processing_times[j,i] <= self.f[i,j], 
-                        "StartFinish(%s,%s)"%(i,j)) 
+                        "startFinish(%s,%s)"%(i,j)) 
         
         
-        #define makespan
-        self.c_max = self.model.addVar(vtype=GRB.CONTINUOUS, name="Makespan", obj=1.0)
+
         for j in range(0,n):
-            self.model.addConstr(self.c_max >= self.f[m-1,j], "MakespanConstr")
+            self.model.addConstr(self.c_max >= self.f[m-1,j], "makespanConstrMachine(%s)"%(j))
         
         
         self.model.update()
@@ -122,14 +131,27 @@ class Master:
         self.alphaCons = {}
         self.betaCons = {}
         self.gammaCons = {}   
-        self.omegaCons = {} 
+        # self.omegaCons = {} 
+        self.lamb = {}
+        
+        # Recreate lambda variables for the patterns.
+        for (key, value) in self.patterns.items():
+            for i in range(0,m):
+                self.lamb[key,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="lambda(%s,%s)"%(key,i), lb=0.0, ub=1.0) #is pattern p used on machine i
+
        
+        #define makespan
+        self.c_max = {}
+        self.c_max = self.model.addVar(vtype=GRB.CONTINUOUS, name="makespan", obj=1.0)
+        
+        self.model.update()
+
         for i in range(0,m):  
             # alphaCons["ConvexityOnMachine(%s)"%(i)] = model.addConstr( quicksum( lamb[p,i] for p in range(len(patterns))) == 1, "ConvexityOnMachine(%s)"%(i)) # only one pattern per machine
-            self.alphaCons["ConvexityOnMachine(%s)"%(i)] = self.model.addConstr( quicksum( value for key, value in self.lamb.items() if key[1] == i) == 1, "ConvexityOnMachine(%s)"%(i)) # only one pattern per machine
+            self.alphaCons["convexityOnMachine(%s)"%(i)] = self.model.addConstr( quicksum( value for key, value in self.lamb.items() if key[1] == i) - 1 == 0, "convexityOnMachine(%s)"%(i)) # only one pattern per machine
           
             
-        self.model.update()
+
         
         # We need to store the created constraints to be able to columns to them later on.
         # Define master
@@ -139,30 +161,24 @@ class Master:
             for j in range(0,n):
                 #old: betaCons["Start(%s,%s)"%(i,j)] = model.addConstr(quicksum(patterns[p][0][j]*lamb[p,i] for p in range(len(patterns))) == s[i,j]) #starting time on machine i for job j is determined by the starting time of job j in the selected pattern p
               
-                self.betaCons["Start(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][0][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) == self.s[i,j]) #starting time on machine i for job j is determined by the starting time of job j in the selected pattern p
+                self.betaCons["start(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][0][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) - self.s[i,j] == 0) #starting time on machine i for job j is determined by the starting time of job j in the selected pattern p
             
-                self.gammaCons["Finish(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][1][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) == self.f[i,j]) #completion time on machine i for job j is determined by the completion time of job j in the selected pattern p
+                self.gammaCons["finish(%s,%s)"%(i,j)] = self.model.addConstr(quicksum(self.patterns[key][1][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) - self.f[i,j] == 0 ) #completion time on machine i for job j is determined by the completion time of job j in the selected pattern p
             if i != m-1:
                 for j in range(0,n):
-                    self.model.addConstr(self.f[i,j] <= self.s[i+1,j], "InterMachine(%s,%s)"%(i,j))
+                    self.model.addConstr(self.f[i,j] <= self.s[i+1,j], "interMachine(%s,%s)"%(i,j))
             for j in range(0,n):   
                 self.model.addConstr(self.s[i,j] + self.processing_times[j,i] <= self.f[i,j], 
-                        "StartFinish(%s,%s)"%(i,j)) 
+                        "startFinish(%s,%s)"%(i,j)) 
         
-        for i in range(0,m):
+        # for i in range(0,m):
         
-            for k in range(0,n):
-                for j in range(0,n):
-                    self.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(k,j,i)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-self.x[k,j,i])) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+        #     for k in range(0,n):
+        #         for j in range(0,n):
+        #             self.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(k,j,i)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-self.x[k,j,i])) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
 
-        
-        
-        
-        #define makespan
-        self.c_max = {}
-        self.c_max = self.model.addVar(vtype=GRB.CONTINUOUS, name="Makespan", obj=1.0)
         for j in range(0,n):
-            self.model.addConstr(self.c_max >= self.f[m-1,j], "MakespanConstr")
+            self.model.addConstr(self.c_max >= self.f[m-1,j], "makespanConstrMachine(%s)"%(j))
         
         
         self.model.update()
@@ -198,28 +214,31 @@ class Pricing:
         for j in range(0,n):
             self.s[j] = self.pricing.addVar(vtype=GRB.CONTINUOUS, name="start(%s)"%(j), lb=0.0, ub=100.0)
             self.f[j] = self.pricing.addVar(vtype=GRB.CONTINUOUS, name="finish(%s)"%(j), lb=0.0, ub=100.0)
-            self.pricing.addConstr(self.s[j] + self.processing_times[j,self.machineIndex] <= self.f[j], "StartFinish(%s)"%(j)) 
+         
          
             
         #Create order matrix
         for j in range(0,n):
             for k in range(0,n):
                 self.x[j,k] = self.pricing.addVar(vtype=GRB.BINARY, name="x(%s,%s)"%(j,k)) 
+                
+        self.pricing.update()
 
-
+        for j in range(0,n):
+            self.pricing.addConstr(self.s[j] + self.processing_times[j,self.machineIndex] <= self.f[j], "startFinish(%s)"%(j)) 
 
         for j in range(0,n):
             for k in range(0,n):
                 if k != j: 
-                    self.pricing.addConstr(self.x[j,k] + self.x[k,j] == 1 , "Precedence(%s)"%(j))
+                    self.pricing.addConstr(self.x[j,k] + self.x[k,j] == 1 , "precedence(%s)"%(j))
 
         for k in range(0,n):
             for j in range(0,n):
-                self.pricing.addConstr(self.f[k] <= self.s[j] + self.bigM*(1-self.x[k,j]), "FinishStart(%s)"%(k)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+                self.pricing.addConstr(self.f[k] <= self.s[j] + self.bigM*(1-self.x[k,j]), "finishStart(%s)"%(k)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
      
             
          
-        self.pricing.update()
+
             
 
             
@@ -327,44 +346,50 @@ class Optimizer:
           alpha = {}
           beta = {}
           gamma = {}
-          omega = {}
+          # omega = {}
           for i in range(0,m):
-              alpha["ConvexityOnMachine(%s)"%(i)] = self.master.alphaCons["ConvexityOnMachine(%s)"%(i)].pi
-              print('alpha["ConvexityOnMachine(%s)"%(i)]: ' , alpha["ConvexityOnMachine(%s)"%(i)])
+              alpha["convexityOnMachine(%s)"%(i)] = self.master.alphaCons["convexityOnMachine(%s)"%(i)].pi
+              print('alpha["convexityOnMachine(%s)"]: '%(i) , alpha["convexityOnMachine(%s)"%(i)])
               for j in range(0,n):
-                  beta["Start(%s,%s)"%(i,j)] = self.master.betaCons["Start(%s,%s)"%(i,j)].pi
-                  print('beta["Start(%s,%s)"%(i,j)]: ', beta["Start(%s,%s)"%(i,j)])                  
-                  gamma["Finish(%s,%s)"%(i,j)] = self.master.gammaCons["Finish(%s,%s)"%(i,j)].pi
-                  print('gamma["Finish(%s,%s)"%(i,j)]: ', gamma["Finish(%s,%s)"%(i,j)])
+                  beta["start(%s,%s)"%(i,j)] = self.master.betaCons["start(%s,%s)"%(i,j)].pi
+                  print('beta["start(%s,%s)"]: ' %(i,j), beta["start(%s,%s)"%(i,j)])                  
+                  gamma["finish(%s,%s)"%(i,j)] = self.master.gammaCons["finish(%s,%s)"%(i,j)].pi
+                  print('gamma["finish(%s,%s)"]: '%(i,j), gamma["finish(%s,%s)"%(i,j)])
                   
-                  for k in range(0,n):
-                      omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)] = self.master.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)].pi
-                      print(' omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)]: ', omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)] )
+                  # for k in range(0,n):
+                  #     omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)] = self.master.omegaCons["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)].pi
+                  #     print(' omega["JobOrderOnMachine(%s,%s,%s)"]: ' %(j,k,i), omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)] )
           # ... and use them as weights completion time problem.
           nbrPricingOpt = 0
           for i in range(0,m):
               pricing = self.pricingList["pricing(%s)"%i]
               for j in range(0,n):
-                  pricing.pricing.getVarByName("start(%s)" %(j)).obj = -beta["Start(%s,%s)"%(i,j)]
-                  print('pricing.pricing.getVarByName("start(%s)" %(j)).obj: ', pricing.pricing.getVarByName("start(%s)" %(j)).obj)
-                  pricing.pricing.getVarByName("finish(%s)" %(j)).obj = -gamma["Finish(%s,%s)"%(i,j)]
-                  print('pricing.pricing.getVarByName("finish(%s)" %(j)).obj: ', pricing.pricing.getVarByName("finish(%s)" %(j)).obj)
+                  pricing.pricing.getVarByName("start(%s)" %(j)).obj = -beta["start(%s,%s)"%(i,j)]
+                  pricing.pricing.getVarByName("finish(%s)" %(j)).obj = -gamma["finish(%s,%s)"%(i,j)]
+                  
+                  pricing.pricing.update()
+                  
+                  print('pricing.pricing.getVarByName("start(%s)" ).obj: ' %(j), pricing.pricing.getVarByName("start(%s)" %(j)).obj)
+                  print('pricing.pricing.getVarByName("finish(%s)" ).obj: ' %(j), pricing.pricing.getVarByName("finish(%s)" %(j)).obj)
               
-                  for k in range(0,n):
-                      pricing.pricing.getVarByName("x(%s,%s)"%(j,k)).obj = omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)]
-                      print("pricing.getVarByName(x(%s,%s)%(j,k)).obj: ", pricing.pricing.getVarByName("x(%s,%s)"%(j,k)).obj)
+                  # for k in range(0,n):
+                  #     pricing.pricing.getVarByName("x(%s,%s)"%(j,k)).obj = omega["JobOrderOnMachine(%s,%s,%s)"%(j,k,i)]
+                  #     print("pricing.getVarByName(x(%s,%s)).obj: " %(j,k), pricing.pricing.getVarByName("x(%s,%s)"%(j,k)).obj)
                     
                 
-              #additional constraints for new patterns during loop
-              for j in range(0,n):
-                  pricing.pricing.addConstr(pricing.pricing.getVarByName("finish(%s)" %(j)) <= self.master.model.getVarByName("finish(%s,%s)" %(i,j)).x)    
+              # #additional constraints for new patterns during loop
+              # for j in range(0,n):
+              #     pricing.pricing.addConstr(pricing.pricing.getVarByName("finish(%s)" %(j)) <= self.master.model.getVarByName("finish(%s,%s)" %(i,j)).x)    
                  
-                  
+              self.master.model.write("master.lp")    
+              pricing.pricing.write("pricing.lp")
+              print("machine: ", i)
+              # sys.exit(1)
               # We solve the pricing problem.
               pricing.pricing.optimize()
               print("Solution of pricing:" , self.retrieveXMatrix(pricing.pricing))
               counter = 0
-              if pricing.pricing.status == GRB.OPTIMAL and  pricing.pricing.objVal - alpha["ConvexityOnMachine(%s)"%(i)] < 0:
+              if pricing.pricing.status == GRB.OPTIMAL and  pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] < 0:
                   # If the Knapsack solution is good enough, we add the column.
                 newPattern = self.retrieveXMatrix(pricing.pricing)
                 self.master.patterns[len(self.master.patterns)] = newPattern
@@ -375,27 +400,28 @@ class Optimizer:
                     
                 for i in range(0,m):
                     col = Column()
-                    col.addTerms(1,self.master.alphaCons["ConvexityOnMachine(%s)"%(i)])
+                    col.addTerms(1,self.master.alphaCons["convexityOnMachine(%s)"%(i)])
                     for j in range(0,n):
-                        col.addTerms(newPattern[0][j], self.master.betaCons["Start(%s,%s)"%(i,j)])
-                        col.addTerms(newPattern[1][j], self.master.gammaCons["Finish(%s,%s)"%(i,j)])
+                        col.addTerms(newPattern[0][j], self.master.betaCons["start(%s,%s)"%(i,j)])
+                        col.addTerms(newPattern[1][j], self.master.gammaCons["finish(%s,%s)"%(i,j)])
                     # We create the lambda variable with this column.
-                    self.master.lamb[len(self.master.patterns) - 1,i] = self.master.model.addVar(name="lambda(%s,%s))"%(len(self.master.patterns) - 1,i), column=col)
-        
+                    self.master.lamb[len(self.master.patterns) - 1,i] = self.master.model.addVar(name="lambda(%s,%s))"%(len(self.master.patterns) - 1,i), column=col, lb=0.0, ub = 1.0)
+                
+                self.master.model.update()    
                 counter += 1
         
-              if pricing.pricing.objVal - alpha["ConvexityOnMachine(%s)"%(i)] >= 0:
+              if pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] >= 0:
                 nbrPricingOpt += 1
                 
           print("nbrPricingOpt: ", nbrPricingOpt)  
           if nbrPricingOpt == m:
     
-              # BRANCHING 1) restict second machine pricing problem, 2) delete patterns that violate this restiction, 3) delete the respective lambdas in master
-              for j in range(0,n):
-                  self.pricingList["pricing(%s)"%(1)].pricing.addConstr(self.pricingList["pricing(%s)"%(1)].pricing.getVarByName("finish(%s)" %(j))<= 50 )
+              # # BRANCHING 1) restict second machine pricing problem, 2) delete patterns that violate this restiction, 3) delete the respective lambdas in master
+              # for j in range(0,n):
+              #     self.pricingList["pricing(%s)"%(1)].pricing.addConstr(self.pricingList["pricing(%s)"%(1)].pricing.getVarByName("finish(%s)" %(j))<= 50 )
                
-              self.cleanPatterns(50)
-              self.master.updateMaster()
+              # self.cleanPatterns(50)
+              # self.master.updateMaster()
     
               break
         
@@ -410,7 +436,7 @@ class Optimizer:
              value.vtype = GRB.BINARY
     
          self.master.model.update()
-         self.master.model.params.outputflag = 1
+         # self.master.model.params.outputflag = 1
          self.master.model.optimize()
         
          # [print("v.x: ", v.x) for v in model.getVars()]
@@ -452,7 +478,6 @@ print()
 
 
 # In[ ]:
-
 
 
 
