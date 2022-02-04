@@ -168,7 +168,7 @@ class Master:
                 for j in range(0,n):
                     self.model.addConstr(self.f[i,j] <= self.s[i+1,j], "interMachine(%s,%s)"%(i,j))
             for j in range(0,n):   
-                self.model.addConstr(self.s[i,j] + self.processing_times[j,i] <= self.f[i,j], 
+                self.model.addConstr(self.s[i,j] + self.processing_times[j,i] == self.f[i,j], 
                         "startFinish(%s,%s)"%(i,j)) 
         
         # for i in range(0,m):
@@ -225,7 +225,7 @@ class Pricing:
         self.pricing.update()
 
         for j in range(0,n):
-            self.pricing.addConstr(self.s[j] + self.processing_times[j,self.machineIndex] <= self.f[j], "startFinish(%s)"%(j)) 
+            self.pricing.addConstr(self.s[j] + self.processing_times[j,self.machineIndex] == self.f[j], "startFinish(%s)"%(j)) 
 
         for j in range(0,n):
             for k in range(0,n):
@@ -389,7 +389,7 @@ class Optimizer:
               pricing.pricing.optimize()
               print("Solution of pricing:" , self.retrieveXMatrix(pricing.pricing))
               counter = 0
-              if pricing.pricing.status == GRB.OPTIMAL and  pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] < 0:
+              if pricing.pricing.status == GRB.OPTIMAL and  pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] < -1e-10:
                   # If the Knapsack solution is good enough, we add the column.
                 newPattern = self.retrieveXMatrix(pricing.pricing)
                 self.master.patterns[len(self.master.patterns)] = newPattern
@@ -410,7 +410,7 @@ class Optimizer:
                 self.master.model.update()    
                 counter += 1
         
-              if pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] >= 0:
+              if pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] >= -1e-10:
                 nbrPricingOpt += 1
                 
           print("nbrPricingOpt: ", nbrPricingOpt)  
@@ -457,12 +457,12 @@ processing_times = np.array([[7,1],[1,7]]) #job 1 takes 7 hours on machine 1, an
 
 # We start with only randomly generated patterns.
 # pattern 1 is[[0,7],[7,8]]. The structure is [[start time job 1, start time job 2,...],[compl time job 1, compl time job 2,...]]
-patterns = {0: [[0,7],[7,8]], 1: [[0,0],[16,60]], 2: [[14,16],[0,0]], 3:[[3,6],[4,13]]  }
+patterns = {0: [[0,7],[7,8]], 1:[[10,12],[11,19]] }
 
 opt = Optimizer(patterns,processing_times, n, m)
 
 opt.loopMasterPricing()
-opt.loopMasterPricing()
+# opt.loopMasterPricing()
 opt.solveIPCompact()
 
 
