@@ -338,7 +338,8 @@ class Optimizer:
           # First, solve the (restricted) LP relaxation.
           
           self.master.model.update()
-          self.master.model.optimize()
+          self.master.model.optimize() 
+          # add fail-safe heuristic 
           
           print('Solved restricted master LP with', self.master.model.numVars, 'columns. Optimum is', self.master.model.objVal)
         
@@ -377,10 +378,10 @@ class Optimizer:
                   #     print("pricing.getVarByName(x(%s,%s)).obj: " %(j,k), pricing.pricing.getVarByName("x(%s,%s)"%(j,k)).obj)
                     
                 
-              # #additional constraints for new patterns during loop
-              # for j in range(0,n):
-              #     pricing.pricing.addConstr(pricing.pricing.getVarByName("finish(%s)" %(j)) <= self.master.model.getVarByName("finish(%s,%s)" %(i,j)).x)    
-                 
+              #additional constraints for new patterns during loop
+              for j in range(0,n):
+                  pricing.pricing.addConstr(pricing.pricing.getVarByName("finish(%s)" %(j)) <= 18)    
+                  
               self.master.model.write("master.lp")    
               pricing.pricing.write("pricing.lp")
               print("machine: ", i)
@@ -418,9 +419,9 @@ class Optimizer:
     
               # # BRANCHING 1) restict second machine pricing problem, 2) delete patterns that violate this restiction, 3) delete the respective lambdas in master
               # for j in range(0,n):
-              #     self.pricingList["pricing(%s)"%(1)].pricing.addConstr(self.pricingList["pricing(%s)"%(1)].pricing.getVarByName("finish(%s)" %(j))<= 50 )
+              #     self.pricingList["pricing(%s)"%(1)].pricing.addConstr(self.pricingList["pricing(%s)"%(1)].pricing.getVarByName("finish(%s)" %(j))<= 18 )
                
-              # self.cleanPatterns(50)
+              # self.cleanPatterns(18)
               # self.master.updateMaster()
     
               break
@@ -462,7 +463,7 @@ patterns = {0: [[0,7],[7,8]], 1:[[10,12],[11,19]] }
 opt = Optimizer(patterns,processing_times, n, m)
 
 opt.loopMasterPricing()
-# opt.loopMasterPricing()
+opt.loopMasterPricing()
 opt.solveIPCompact()
 
 

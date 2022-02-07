@@ -11,6 +11,16 @@ Subject To
  finishStart(0): finish(0) - start(1) + 100 x(0,1) <= 100
  finishStart(1): - start(0) + finish(1) + 100 x(1,0) <= 100
  finishStart(1): - start(1) + finish(1) + 100 x(1,1) <= 100
+ R8: finish(0) <= 18
+ R9: finish(1) <= 18
+ R10: finish(0) <= 18
+ R11: finish(1) <= 18
+ R12: finish(0) <= 18
+ R13: finish(1) <= 18
+ R14: finish(0) <= 18
+ R15: finish(1) <= 18
+ R16: finish(0) <= 18
+ R17: finish(1) <= 18
 Bounds
  start(0) <= 100
  finish(0) <= 100
