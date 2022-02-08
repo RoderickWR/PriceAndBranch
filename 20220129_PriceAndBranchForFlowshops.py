@@ -319,6 +319,7 @@ class Optimizer:
           
           self.master.model.update()
           self.master.model.optimize() 
+          self.Gantt()
           currentRMPVal = self.master.model.objVal
 
           # add fail-safe heuristic 
