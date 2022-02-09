@@ -446,7 +446,7 @@ class Optimizer:
 #PARAMS 
 n=4 # number of jobs
 m=2 # number of machines
-processing_times = np.array([[7,1],[2,3],[1,7],[6,1]]) #job 1 takes 7 hours on machine 1, and 1 hour on machine 2, job 2 takes 1 hour on machine 1, and 7 hours on machine 2
+processing_times = np.array([[7,1],[2,3],[1,7],[6,10]]) #job 1 takes 7 hours on machine 1, and 1 hour on machine 2, job 2 takes 1 hour on machine 1, and 7 hours on machine 2
 
 
 # We start with only randomly generated patterns.
