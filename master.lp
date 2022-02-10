@@ -7,15 +7,14 @@ Subject To
  convexityOnMachine(1): lambda(0,1) + lambda(1,1) + lambda(2,1)) = 1
  finishStart(0,0,1): 100 lambda(0,0) + finish(0,0) - start(0,1)
    + 100 lambda(2,0)) <= 100
- finishStart(0,0,2): 100 lambda(0,0) + finish(0,0) - start(0,2)
-   + 100 lambda(2,0)) <= 100
+ finishStart(0,0,2): 100 lambda(0,0) + finish(0,0) - start(0,2) <= 100
  finishStart(0,0,3): 100 lambda(0,0) + finish(0,0) - start(0,3) <= 100
  finishStart(0,1,0): - start(0,0) + finish(0,1) <= 100
  finishStart(0,1,2): 100 lambda(0,0) + 100 lambda(1,0) + finish(0,1)
    - start(0,2) <= 100
  finishStart(0,1,3): 100 lambda(0,0) + 100 lambda(1,0) + finish(0,1)
    - start(0,3) <= 100
- finishStart(0,2,0): - start(0,0) + finish(0,2) <= 100
+ finishStart(0,2,0): - start(0,0) + finish(0,2) + 100 lambda(2,0)) <= 100
  finishStart(0,2,1): - start(0,1) + finish(0,2) + 100 lambda(2,0)) <= 100
  finishStart(0,2,3): 100 lambda(0,0) + 100 lambda(1,0) + finish(0,2)
    - start(0,3) <= 100
@@ -61,8 +60,8 @@ Subject To
  makespanConstrMachine(3): - finish(1,3) + makespan >= 0
 Bounds
  lambda(0,0) <= 1
- lambda(0,1) <= 1
  lambda(1,0) <= 1
+ lambda(0,1) <= 1
  lambda(1,1) <= 1
  start(0,0) <= 100
  finish(0,0) <= 100
@@ -80,6 +79,6 @@ Bounds
  finish(1,2) <= 100
  start(1,3) <= 100
  finish(1,3) <= 100
- lambda(2,0)) <= 1
  lambda(2,1)) <= 1
+ lambda(2,0)) <= 1
 End

@@ -63,8 +63,8 @@ class Master:
         self.model.modelSense = GRB.MINIMIZE
         
         # Create lambda variables for these patterns.
-        for (key, value) in self.patterns.items():
-            for i in range(0,m):
+        for i in range(0,m):
+            for (key, value) in self.patterns[i].items():
                 self.lamb[key,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="lambda(%s,%s)"%(key,i), lb=0.0, ub=1.0) #is pattern p used on machine i
          
         for i in range(0,m):    
@@ -74,7 +74,7 @@ class Master:
                 
                 
         for i in range(0,m):  
-            self.alphaCons["convexityOnMachine(%s)"%(i)] = self.model.addConstr( quicksum( self.lamb[key,i] for (key,value) in self.patterns.items()) - 1 == 0, "convexityOnMachine(%s)"%(i)) # only one pattern per machine
+            self.alphaCons["convexityOnMachine(%s)"%(i)] = self.model.addConstr( quicksum( self.lamb[key,i] for (key,value) in self.patterns[i].items()) - 1 == 0, "convexityOnMachine(%s)"%(i)) # only one pattern per machine
            
                 
         #define makespan
@@ -88,7 +88,7 @@ class Master:
             for k in range(0,n):
                 for j in range(0,n):
                     if k != j:
-                        self.omegaCons["finishStart(%s,%s,%s)"%(i,k,j)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-quicksum(self.patterns[key][k][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) ), "finishStart(%s,%s,%s)"%(i,k,j)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+                        self.omegaCons["finishStart(%s,%s,%s)"%(i,k,j)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-quicksum(self.patterns[i][key][k][j]*self.lamb[key,i] for (key,value) in self.patterns[i].items()) ), "finishStart(%s,%s,%s)"%(i,k,j)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
                         print((i,k,j) , self.model.getConstrByName("finishStart(%s,%s,%s)"%(i,k,j)))
 
         for i in range(0,m):
@@ -125,8 +125,10 @@ class Master:
         self.lamb = {}
         
         # Recreate lambda variables for the patterns.
-        for (key, value) in self.patterns.items():
-            for i in range(0,m):
+        
+        
+        for i in range(0,m):
+            for (key, value) in self.patterns[i].items():
                 self.lamb[key,i] = self.model.addVar(vtype=GRB.CONTINUOUS, name="lambda(%s,%s)"%(key,i), lb=0.0, ub=1.0) #is pattern p used on machine i
 
        
@@ -144,7 +146,7 @@ class Master:
             for k in range(0,n):
                 for j in range(0,n):
                     if k != j:
-                        self.omegaCons["finishStart(%s,%s,%s)"%(i,k,j)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-quicksum(self.patterns[key][k][j]*self.lamb[key,i] for (key,value) in self.patterns.items()) ), "finishStart(%s,%s,%s)"%(i,k,j)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+                        self.omegaCons["finishStart(%s,%s,%s)"%(i,k,j)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-quicksum(self.patterns[i][key][k][j]*self.lamb[key,i] for (key,value) in self.patterns[i].items()) ), "finishStart(%s,%s,%s)"%(i,k,j)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
     
 
         
@@ -383,23 +385,22 @@ class Optimizer:
               if pricing.pricing.status == GRB.OPTIMAL and  pricing.pricing.objVal - alpha["convexityOnMachine(%s)"%(i)] < -1e-10:
                   # If the Knapsack solution is good enough, we add the column.
                 newPattern = self.retrieveXMatrix(pricing.pricing)
-                self.master.patterns[len(self.master.patterns)] = newPattern
+                self.master.patterns[i][len(self.master.patterns)] = newPattern
                 print("and ", newPattern, " is added")
                 print('Appended pattern: ', counter)
             
                 # We now create columns (#m because lambda has dimension [p,m]) to be added to the (restricted) LP relaxation of the main problem.
-                    
-                for i in range(0,m):
-                    col = Column()
-                    col.addTerms(1,self.master.alphaCons["convexityOnMachine(%s)"%(i)])
-                    for j in range(0,n):
-                        for k in range(0,n):
-                            if k != j:
-                                col.addTerms(newPattern[j][k]*self.master.bigM, self.master.omegaCons["finishStart(%s,%s,%s)"%(i,j,k)])
-                            
-                    # We create the lambda variable with this column.
-                    self.master.lamb[len(self.master.patterns) - 1,i] = self.master.model.addVar(name="lambda(%s,%s))"%(len(self.master.patterns) - 1,i), column=col, lb=0.0, ub = 1.0)
                 
+                col = Column()
+                col.addTerms(1,self.master.alphaCons["convexityOnMachine(%s)"%(i)])
+                for j in range(0,n):
+                    for k in range(0,n):
+                        if k != j:
+                            col.addTerms(newPattern[j][k]*self.master.bigM, self.master.omegaCons["finishStart(%s,%s,%s)"%(i,j,k)])
+                        
+                # We create the lambda variable with this column.
+                self.master.lamb[len(self.master.patterns[i]) - 1,i] = self.master.model.addVar(name="lambda(%s,%s))"%(len(self.master.patterns[i]) - 1,i), column=col, lb=0.0, ub = 1.0)
+            
                 self.master.model.update()    
                 counter += 1
         
@@ -451,7 +452,7 @@ processing_times = np.array([[7,1],[2,3],[1,7],[6,10]]) #job 1 takes 7 hours on 
 
 # We start with only randomly generated patterns.
 # pattern 1 is[[0,7],[7,8]]. The structure is [[start time job 1, start time job 2,...],[compl time job 1, compl time job 2,...]]
-patterns = {0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }
+patterns = [{0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }, {0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }]
 
 opt = Optimizer(patterns,processing_times, n, m)
 
