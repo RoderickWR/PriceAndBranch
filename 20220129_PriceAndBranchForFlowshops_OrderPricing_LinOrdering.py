@@ -1,7 +1,13 @@
-#This version implements Price and Branch for a 4 jobs 2 machine flow shop. The pricing will generate new order matrices. 
-#Hence the patterns are integer patterns. As a result 2 new patterns are generated for each machine. However pricing stops then because
-#the relaxed RMP does not produce duals the cause new pattern generation. This might be because the relaxed RMP formulation is not very tight,
-#as bigM constraints are used extensively. The convex pattern combination in the master does not reflect a IP feasible solution very well. 
+#This version is an attempt to implement linear ordering in the master to avoid bigM constraints and tighten the relaxed RMP.
+#However to determine the starting and end times on the second machine, linear ordering must use the timing information from the first machine.
+#Gaps between jobs also need to be realized with dummy jobs since inequalities will destroy the concept of linear ordering.
+
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Feb 11 11:41:18 2022
+
+@author: WallrathR
+"""
 
 # -*- coding: utf-8 -*-
 """
@@ -90,11 +96,9 @@ class Master:
 
 
         for i in range(0,m):
-            for k in range(0,n):
-                for j in range(0,n):
-                    if k != j:
-                        self.omegaCons["finishStart(%s,%s,%s)"%(i,k,j)] = self.model.addConstr(self.f[i,k] <= self.s[i,j] + self.bigM*(1-quicksum(self.patterns[i][key][k][j]*self.lamb[key,i] for (key,value) in self.patterns[i].items()) ), "finishStart(%s,%s,%s)"%(i,k,j)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
-                        print((i,k,j) , self.model.getConstrByName("finishStart(%s,%s,%s)"%(i,k,j)))
+            for j in range(0,n):
+                self.omegaCons["finishStart(%s,%s)"%(i,j)] = self.model.addConstr(self.f[i,j] >= quicksum(quicksum((1-self.patterns[i][key][j][j2])*self.processing_times[j2,i] for j2 in range(0,n))*self.lamb[key,i] for (key,value) in self.patterns[i].items()) , "finishStart(%s,%s)"%(i,j)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+                # print((i,k,j) , self.model.getConstrByName("finishStart(%s,%s,%s)"%(i,k,j)))
 
         for i in range(0,m):
             # for j in range(0,n):
@@ -104,7 +108,7 @@ class Master:
                 for j in range(0,n):
                     self.model.addConstr(self.f[i,j] <= self.s[i+1,j], "interMachine(%s,%s)"%(i,j))
             for j in range(0,n):   
-                self.model.addConstr(self.s[i,j] + self.processing_times[j,i] == self.f[i,j], 
+                self.model.addConstr(self.s[i,j] + self.processing_times[j,i] <= self.f[i,j], 
                         "startFinish(%s,%s)"%(i,j)) 
         
         
@@ -230,9 +234,8 @@ class Pricing:
                     self.pricing.addConstr(self.x[j,k] + self.x[k,j] == 1 , "precedence(%s)"%(j))
                     # self.pricing.addConstr(self.s[j] <= (1-self.x[j,k])*50, "fixAtZero(%s)"%(j)) #if j => k, then start time of j should be 0
 
-        for k in range(0,n):
-            for j in range(0,n):
-                self.pricing.addConstr(self.f[k] <= self.s[j] + self.bigM*(1-self.x[k,j]), "finishStart(%s)"%(k)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
+        for j in range(0,n):
+            self.pricing.addConstr(self.f[j] == quicksum((1-self.x[j,j2])*self.processing_times[j2,self.machineIndex] for j2 in range(0,n)), "finishStart(%s)"%(k)) # for each job k the finishing date one machine i has to be smaller than the starting date of the next job j, (1) if j follows k on i, (2) if job k was not the cutoff job (last job) on i 
      
             
          
@@ -450,14 +453,15 @@ class Optimizer:
          self.Gantt()
 
 #PARAMS 
-n=4 # number of jobs
+n=2 # number of jobs
 m=2 # number of machines
-processing_times = np.array([[7,1],[2,3],[1,7],[6,10]]) #job 1 takes 7 hours on machine 1, and 1 hour on machine 2, job 2 takes 1 hour on machine 1, and 7 hours on machine 2
+# processing_times = np.array([[7,1],[2,3],[1,7],[6,10]]) #job 1 takes 7 hours on machine 1, and 1 hour on machine 2, job 2 takes 1 hour on machine 1, and 7 hours on machine 2
+processing_times = np.array([[7,1],[1,7]]) #job 1 takes 7 hours on machine 1, and 1 hour on machine 2, job 2 takes 1 hour on machine 1, and 7 hours on machine 2
 
 
 # We start with only randomly generated patterns.
-# pattern 1 is[[0,7],[7,8]]. The structure is [[start time job 1, start time job 2,...],[compl time job 1, compl time job 2,...]]
-patterns = [{0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }, {0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }]
+# patterns = [{0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }, {0: [[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]], 1:[[0,0,0,0],[0,0,1,1],[0,0,0,1],[0,1,1,1]] }]
+patterns = [{0: [[0,1],[0,0]], 1:[[0,0],[1,0]] }, {0: [[0,1],[0,0]], 1:[[0,0],[1,0]] }]
 
 opt = Optimizer(patterns,processing_times, n, m)
 
